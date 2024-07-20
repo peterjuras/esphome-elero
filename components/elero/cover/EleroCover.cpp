@@ -21,10 +21,13 @@ void EleroCover::setup() {
     if((this->open_duration_ > 0) && (this->close_duration_ > 0))
       this->position = 0.5f;
   }
-  ESP_LOGD(TAG, "Peter's changes");
 }
 
 void EleroCover::loop() {
+  if (this->initialized_ == false) {
+    ESP_LOGD(TAG, "Peter's changes");
+    this->initialized_ = true;
+  }
   uint32_t intvl = this->poll_intvl_;
   uint32_t now = millis();
   if(this->current_operation != COVER_OPERATION_IDLE) {
