@@ -73,7 +73,7 @@ bool EleroCover::is_at_target() {
 void EleroCover::handle_commands(uint32_t now) {
   if((now - this->last_command_) > ELERO_DELAY_SEND_PACKETS) {
     if(this->commands_to_send_.size() > 0) {
-      ESP_LOGD(TAG, "Peter increased packets");
+      ESP_LOGD(TAG, "Peter decreased packets");
       this->command_.payload[4] = this->commands_to_send_.front();
       if(this->parent_->send_command(&this->command_)) {
         this->send_packets_++;
