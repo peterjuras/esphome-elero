@@ -149,7 +149,7 @@ void Elero::write_cmd(uint8_t cmd) {
 
 bool Elero::wait_rx() {
   ESP_LOGVV(TAG, "wait_rx");
-  uint8_t timeout = 200;
+  uint8_t timeout = 2000;
   while ((this->read_status(CC1101_MARCSTATE) != CC1101_MARCSTATE_RX) && (--timeout != 0)) {
     delay_microseconds_safe(200);
   }
@@ -162,7 +162,7 @@ bool Elero::wait_rx() {
 
 bool Elero::wait_idle() {
   ESP_LOGVV(TAG, "wait_idle");
-  uint8_t timeout = 200;
+  uint8_t timeout = 2000;
   while ((this->read_status(CC1101_MARCSTATE) != CC1101_MARCSTATE_IDLE) && (--timeout != 0)) {
     delay_microseconds_safe(200);
   }
@@ -175,7 +175,7 @@ bool Elero::wait_idle() {
 
 bool Elero::wait_tx() {
   ESP_LOGVV(TAG, "wait_tx");
-  uint8_t timeout = 200;
+  uint8_t timeout = 2000;
 
   while ((this->read_status(CC1101_MARCSTATE) != CC1101_MARCSTATE_TX) && (--timeout != 0)) {
     delay_microseconds_safe(200);
@@ -189,7 +189,7 @@ bool Elero::wait_tx() {
 
 bool Elero::wait_tx_done() {
   ESP_LOGVV(TAG, "wait_tx_done");
-  uint8_t timeout = 200;
+  uint8_t timeout = 2000;
   
   //while (((this->read_status(CC1101_TXBYTES) & 0x7f) != 0) && (--timeout != 0)) {
   while((!this->received_) && (--timeout != 0)) {
