@@ -21,6 +21,7 @@ void EleroCover::setup() {
     if((this->open_duration_ > 0) && (this->close_duration_ > 0))
       this->position = 0.5f;
   }
+  ESP_LOGD(TAG, "Peter's changes");
 }
 
 void EleroCover::loop() {
