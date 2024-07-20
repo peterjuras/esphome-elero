@@ -24,10 +24,6 @@ void EleroCover::setup() {
 }
 
 void EleroCover::loop() {
-  if (this->initialized_ == false) {
-    ESP_LOGD(TAG, "Peter's changes");
-    this->initialized_ = true;
-  }
   uint32_t intvl = this->poll_intvl_;
   uint32_t now = millis();
   if(this->current_operation != COVER_OPERATION_IDLE) {
@@ -75,6 +71,7 @@ bool EleroCover::is_at_target() {
 }
 
 void EleroCover::handle_commands(uint32_t now) {
+  ESP_LOGD(TAG, "Peter's changes");
   if((now - this->last_command_) > ELERO_DELAY_SEND_PACKETS) {
     if(this->commands_to_send_.size() > 0) {
       this->command_.payload[4] = this->commands_to_send_.front();

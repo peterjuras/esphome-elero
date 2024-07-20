@@ -63,7 +63,6 @@ class EleroCover : public cover::Cover, public Component {
   uint32_t poll_intvl_{0};
   float target_position_{0};
   bool supports_tilt_{false};
-  bool initialized_{false};
   uint8_t command_up_{0x20};
   uint8_t command_down_{0x40};
   uint8_t command_check_{0x00};
