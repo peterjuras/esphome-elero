@@ -67,12 +67,21 @@
 
 - Properly initialize `received_`, `transmitting_`, and `tx_start_time_` in `setup()`
 
+### 8. Compilation Errors
+
+**Problem**: Duplicate lines in `read_status()` function causing syntax errors.
+
+**Fix**:
+
+- Removed duplicate `this->disable()`, `delay_microseconds_safe(15)`, and `return data` lines
+- Fixed function structure to eliminate compilation errors
+
 ## Key Changes Made
 
 ### Modified Files:
 
 1. **elero.h**: Added mutex, transmission state tracking variables
-2. **elero.cpp**: Fixed race conditions, added thread safety, improved error handling
+2. **elero.cpp**: Fixed race conditions, added thread safety, improved error handling, fixed syntax errors
 3. **EleroCover.cpp**: Added transmission jitter to prevent collisions
 
 ### New Features Added:
@@ -93,3 +102,10 @@ With these fixes, multiple covers should now work reliably without intermittent 
 2. Monitor logs for any timeout messages or retry failures
 3. Verify that covers no longer require restarts to function properly
 4. Check that polling is properly spaced out (visible in logs)
+
+## Compilation Status
+
+✅ All syntax errors have been resolved
+✅ Race condition protections are in place
+✅ Thread safety mechanisms implemented
+✅ Ready for testing with ESPHome framework

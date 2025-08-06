@@ -293,10 +293,6 @@ uint8_t Elero::read_status(uint8_t addr) {
   this->disable();
   return data;
 }
-  this->disable();
-  delay_microseconds_safe(15);
-  return data;
-}
 
 void Elero::read_buf(uint8_t addr, uint8_t *buf, uint8_t len) {
   this->enable();
