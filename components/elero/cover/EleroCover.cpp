@@ -72,7 +72,10 @@ bool EleroCover::is_at_target() {
 }
 
 void EleroCover::handle_commands(uint32_t now) {
-  if((now - this->last_command_) > ELERO_DELAY_SEND_PACKETS) {
+  // Add small jitter based on blind address to prevent multiple covers from transmitting simultaneously
+  uint32_t jitter = (this->command_.blind_addr & 0xFF) % 20; // 0-19ms jitter
+  
+  if((now - this->last_command_) > (ELERO_DELAY_SEND_PACKETS + jitter)) {
     if(this->commands_to_send_.size() > 0) {
       this->command_.payload[4] = this->commands_to_send_.front();
       if(this->parent_->send_command(&this->command_)) {

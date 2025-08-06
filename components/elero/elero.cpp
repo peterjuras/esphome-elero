@@ -11,7 +11,15 @@ static const uint8_t flash_table_encode[] = {0x08, 0x02, 0x0d, 0x01, 0x0f, 0x0e,
 static const uint8_t flash_table_decode[] = {0x0a, 0x03, 0x01, 0x0c, 0x0d, 0x07, 0x0f, 0x06, 0x00, 0x08, 0x0b, 0x0e, 0x09, 0x02, 0x05, 0x04};
 
 void Elero::loop() {
-  if(this->received_) {
+  // Reset transmission state if it's been too long (transmission timeout protection)
+  if (this->transmitting_ && (millis() - this->tx_start_time_) > 1000) {
+    ESP_LOGW(TAG, "Transmission timeout detected, resetting radio state");
+    this->transmitting_ = false;
+    this->flush_and_rx();
+  }
+  
+  // Don't process received messages while transmitting to avoid race conditions
+  if(this->received_ && !this->transmitting_) {
     ESP_LOGVV(TAG, "loop says \"received\"");
     this->received_ = false;
     uint8_t len = this->read_status(CC1101_RXBYTES);
@@ -39,7 +47,10 @@ void IRAM_ATTR Elero::interrupt(Elero *arg) {
 }
 
 void IRAM_ATTR Elero::set_received() {
-  this->received_ = true;
+  // Only set received flag if we're not transmitting to avoid race conditions
+  if (!this->transmitting_) {
+    this->received_ = true;
+  }
 }
 
 void Elero::dump_config() {
@@ -52,6 +63,12 @@ void Elero::setup() {
   this->gdo0_pin_->setup();
   this->gdo0_irq_pin_ = this->gdo0_pin_->to_isr();
   this->gdo0_pin_->attach_interrupt(Elero::interrupt, this, gpio::INTERRUPT_FALLING_EDGE);
+  
+  // Initialize state flags
+  this->received_ = false;
+  this->transmitting_ = false;
+  this->tx_start_time_ = 0;
+  
   this->reset();
   this->init();
 }
@@ -64,6 +81,8 @@ void Elero::flush_and_rx() {
   this->write_cmd(CC1101_SFTX);
   this->write_cmd(CC1101_SRX);
   this->received_ = false;
+  // Wait for RX mode to be established
+  this->wait_rx();
 }
 
 void Elero::reset() {
@@ -191,8 +210,10 @@ bool Elero::wait_tx_done() {
   ESP_LOGVV(TAG, "wait_tx_done");
   uint8_t timeout = 200;
   
-  //while (((this->read_status(CC1101_TXBYTES) & 0x7f) != 0) && (--timeout != 0)) {
-  while((!this->received_) && (--timeout != 0)) {
+  // Wait for the TX FIFO to be empty and state to change from TX
+  while (((this->read_status(CC1101_TXBYTES) & 0x7f) != 0 || 
+          this->read_status(CC1101_MARCSTATE) == CC1101_MARCSTATE_TX) && 
+         (--timeout != 0)) {
     delay_microseconds_safe(200);
   }
 
@@ -204,31 +225,51 @@ bool Elero::wait_tx_done() {
 
 bool Elero::transmit() {
   ESP_LOGVV(TAG, "transmit called for %d data bytes", this->msg_tx_[0]);
-  //this->flush_and_rx();
+  
+  // Mark as transmitting to prevent race conditions
+  this->transmitting_ = true;
+  this->tx_start_time_ = millis();
+  
+  // Set to RX mode first to ensure clean state
   this->write_cmd(CC1101_SRX);
   if(!this->wait_rx()) {
+    ESP_LOGE(TAG, "Failed to enter RX mode before transmission");
+    this->transmitting_ = false;
     return false;
   }
 
+  // Load data into TX FIFO
   this->write_burst(CC1101_TXFIFO, this->msg_tx_, this->msg_tx_[0] + 1);
+  
+  // Start transmission
   this->write_cmd(CC1101_STX);
 
   if(!this->wait_tx()) {
+    ESP_LOGE(TAG, "Failed to enter TX mode");
     this->flush_and_rx();
+    this->transmitting_ = false;
     return false;
   }
+  
   if(!this->wait_tx_done()) {
+    ESP_LOGE(TAG, "Transmission did not complete properly");
     this->flush_and_rx();
+    this->transmitting_ = false;
     return false;
   }
 
+  // Check if transmission was successful
   uint8_t bytes = this->read_status(CC1101_TXBYTES) & 0x7f;
   if(bytes != 0) {
     ESP_LOGE(TAG, "Error transferring, %d bytes left in buffer", bytes);
     this->flush_and_rx();
+    this->transmitting_ = false;
     return false;
   } else {
     ESP_LOGV(TAG, "Transmission successful");
+    // Return to RX mode
+    this->flush_and_rx();
+    this->transmitting_ = false;
     return true;
   }
 }
@@ -239,6 +280,7 @@ uint8_t Elero::read_reg(uint8_t addr) {
   this->enable();
   this->write_byte(addr);
   data = this->read_byte();
+  this->disable();
   return data;
 }
 
@@ -248,6 +290,9 @@ uint8_t Elero::read_status(uint8_t addr) {
   this->enable();
   this->write_byte(addr | CC1101_READ_BURST);
   data = this->read_byte();
+  this->disable();
+  return data;
+}
   this->disable();
   delay_microseconds_safe(15);
   return data;
@@ -467,11 +512,17 @@ void Elero::register_cover(EleroCover *cover) {
     return;
   }
   this->address_to_cover_mapping_.insert({address, cover});
+  // Spread out polling by 5 seconds per cover to avoid collisions
   cover->set_poll_offset((this->address_to_cover_mapping_.size() - 1) * 5000);
+  ESP_LOGI(TAG, "Registered cover with address 0x%06x, poll offset: %d ms", address, (this->address_to_cover_mapping_.size() - 1) * 5000);
 }
 
 bool Elero::send_command(t_elero_command *cmd) {
   ESP_LOGVV(TAG, "send_command called");
+  
+  // Lock the radio to prevent concurrent access
+  std::lock_guard<std::mutex> lock(this->radio_mutex_);
+  
   uint16_t code = (0x00 - (cmd->counter * 0x708f)) & 0xffff;
   this->msg_tx_[0] = 0x1d; // message length
   this->msg_tx_[1] = cmd->counter; // message counter
