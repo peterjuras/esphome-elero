@@ -73,19 +73,16 @@ bool EleroCover::is_at_target() {
 
 void EleroCover::handle_commands(uint32_t now) {
   // Add small jitter based on blind address to prevent multiple covers from transmitting simultaneously
-  uint32_t jitter = (this->command_.blind_addr & 0xFF) % 20; // 0-19ms jitter
+  uint32_t jitter = (this->command_.blind_addr & 0xFF) % 40; // 0-39ms jitter
   
   if((now - this->last_command_) > (ELERO_DELAY_SEND_PACKETS + jitter)) {
     if(this->commands_to_send_.size() > 0) {
       this->command_.payload[4] = this->commands_to_send_.front();
       if(this->parent_->send_command(&this->command_)) {
-        this->send_packets_++;
+        // One radio-layer call already sent all required repeats.
         this->send_retries_ = 0;
-        if(this->send_packets_ >= ELERO_SEND_PACKETS) {
-          this->commands_to_send_.pop();
-          this->send_packets_ = 0;
-          this->increase_counter();
-        }
+        this->commands_to_send_.pop();
+        this->increase_counter();
       } else {
         ESP_LOGD(TAG, "Retry #%d for blind 0x%02x", this->send_retries_, this->command_.blind_addr);
         this->send_retries_++;
